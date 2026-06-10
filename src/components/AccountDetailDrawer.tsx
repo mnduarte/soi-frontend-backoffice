@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './common/Icon';
 import {
@@ -20,6 +20,28 @@ import { formatDateLong, formatLastSeen, money } from '../lib/format';
 
 const CORE_APP_URL =
   (import.meta.env as { VITE_CORE_APP_URL?: string }).VITE_CORE_APP_URL ?? 'http://localhost:5173';
+
+// Quick-pick brand colors (same set as the dentist app). A native color input
+// covers anything outside the palette.
+const BRAND_PALETTE = ['#2F54EB', '#0EA5E9', '#06A37A', '#7C3AED', '#E11D48', '#D97706', '#DB2777'];
+
+const EDIT_LABEL: CSSProperties = {
+  fontSize: 11.5,
+  color: 'var(--text-tertiary)',
+  marginBottom: 5,
+  fontWeight: 500,
+};
+const EDIT_INPUT: CSSProperties = {
+  width: '100%',
+  height: 36,
+  padding: '0 11px',
+  fontSize: 13,
+  borderRadius: 8,
+  border: '1px solid var(--border-default)',
+  background: 'var(--bg-surface)',
+  color: 'var(--text-primary)',
+  outline: 'none',
+};
 
 // =============================================================================
 // PaymentNotice — contextual banner shown inside the drawer body. Mirrors what
@@ -138,6 +160,14 @@ export function AccountDetailDrawer() {
     enabled: Boolean(clinicId),
   });
 
+  // Editable profile fields, synced from the loaded clinic.
+  const [form, setForm] = useState({ name: '', doctorName: '', brandColor: '#2F54EB' });
+  useEffect(() => {
+    if (clinic) {
+      setForm({ name: clinic.name, doctorName: clinic.doctorName ?? '', brandColor: clinic.brandColor });
+    }
+  }, [clinic?._id]);
+
   // Esc closes the drawer.
   useEffect(() => {
     if (!clinicId) return;
@@ -153,6 +183,19 @@ export function AccountDetailDrawer() {
     qc.invalidateQueries({ queryKey: ['admin-metrics'] });
     qc.invalidateQueries({ queryKey: ['admin-clinic', clinicId] });
   };
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      adminClinicsApi.update(clinicId!, {
+        name: form.name.trim(),
+        doctorName: form.doctorName.trim(),
+        brandColor: form.brandColor,
+      }),
+    onSuccess: () => {
+      showToast('Cambios guardados');
+      refreshAll();
+    },
+  });
 
   const paymentMutation = useMutation({
     mutationFn: () => adminClinicsApi.recordPayment(clinicId!),
@@ -206,6 +249,12 @@ export function AccountDetailDrawer() {
   const pendingPayActions: PaymentStatus[] = ['due-soon', 'overdue', 'grace-end'];
   const showPayActions =
     c && pendingPayActions.includes(c.paymentStatus) && c.status !== 'TRIAL';
+
+  const dirty =
+    !!c &&
+    (form.name.trim() !== c.name ||
+      form.doctorName.trim() !== (c.doctorName ?? '') ||
+      form.brandColor.toLowerCase() !== c.brandColor.toLowerCase());
 
   return (
     <>
@@ -323,6 +372,67 @@ export function AccountDetailDrawer() {
                         .slice(0, 2)
                         .join(' ')}`}
                 </button>
+
+                <SectionTitle>Editar consultorio</SectionTitle>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                  <label style={{ display: 'block' }}>
+                    <div style={EDIT_LABEL}>Nombre del consultorio</div>
+                    <input
+                      style={EDIT_INPUT}
+                      value={form.name}
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    />
+                  </label>
+                  <label style={{ display: 'block' }}>
+                    <div style={EDIT_LABEL}>Doctor/a</div>
+                    <input
+                      style={EDIT_INPUT}
+                      value={form.doctorName}
+                      onChange={e => setForm(f => ({ ...f, doctorName: e.target.value }))}
+                    />
+                  </label>
+                  <div>
+                    <div style={EDIT_LABEL}>Color de marca</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {BRAND_PALETTE.map(col => {
+                        const active = form.brandColor.toLowerCase() === col.toLowerCase();
+                        return (
+                          <button
+                            key={col}
+                            type="button"
+                            title={col}
+                            onClick={() => setForm(f => ({ ...f, brandColor: col }))}
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 7,
+                              background: col,
+                              cursor: 'pointer',
+                              border: active ? '2px solid var(--text-primary)' : '2px solid transparent',
+                              boxShadow: '0 0 0 1px var(--border-subtle)',
+                            }}
+                          />
+                        );
+                      })}
+                      <input
+                        type="color"
+                        value={form.brandColor}
+                        onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))}
+                        title="Color personalizado"
+                        style={{ width: 30, height: 30, padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn--primary btn--sm"
+                    style={{ alignSelf: 'flex-start' }}
+                    disabled={!dirty || updateMutation.isPending}
+                    onClick={() => updateMutation.mutate()}
+                  >
+                    <Icon name="check" size={13} />{' '}
+                    {updateMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+                  </button>
+                </div>
 
                 <SectionTitle>Datos de la cuenta</SectionTitle>
                 <div style={{ marginBottom: 8 }}>

@@ -98,6 +98,23 @@ export const adminClinicsApi = {
       .post<{ data: CreateClinicAccountResponse }>('/admin/clinics', dto)
       .then(r => r.data.data),
 
+  // Editar perfil del consultorio (nombre, doctor, color, etc.).
+  update: (
+    id: string,
+    dto: Partial<{
+      name: string;
+      doctorName: string;
+      city: string;
+      phone: string;
+      contactEmail: string;
+      brandColor: string;
+      logoStyle: LogoStyle;
+    }>,
+  ) =>
+    adminClient
+      .patch<{ data: ClinicListItem }>(`/admin/clinics/${id}`, dto)
+      .then(r => r.data.data),
+
   extendSubscription: (id: string, days: number) =>
     adminClient
       .post<{ data: ClinicListItem }>(`/admin/clinics/${id}/extend-subscription`, { days })
