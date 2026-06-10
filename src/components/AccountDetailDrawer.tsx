@@ -7,7 +7,6 @@ import {
   ClinicLogo,
   ConsoleMetric,
   CopyField,
-  LastSeenCell,
   PayBadge,
   SectionTitle,
 } from './common/primitives';
