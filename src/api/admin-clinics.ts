@@ -170,7 +170,50 @@ export const adminClinicsApi = {
         `/admin/password-reset-requests/${id}/resolve`,
       )
       .then(r => r.data.data),
+
+  // ---- Usuarios de la clínica (N por clínica) ----
+  listUsers: (id: string) =>
+    adminClient
+      .get<{ data: ClinicUser[] }>(`/admin/clinics/${id}/users`)
+      .then(r => r.data.data),
+
+  createUser: (id: string, dto: CreateClinicUserPayload) =>
+    adminClient
+      .post<{ data: { user: ClinicUser; tempPassword: string } }>(
+        `/admin/clinics/${id}/users`,
+        dto,
+      )
+      .then(r => r.data.data),
+
+  resetUserPassword: (id: string, userId: string) =>
+    adminClient
+      .post<{ data: { username: string | null; tempPassword: string } }>(
+        `/admin/clinics/${id}/users/${userId}/reset-password`,
+      )
+      .then(r => r.data.data),
+
+  deactivateUser: (id: string, userId: string) =>
+    adminClient
+      .delete<{ data: { ok: boolean } }>(`/admin/clinics/${id}/users/${userId}`)
+      .then(r => r.data.data),
 };
+
+export interface ClinicUser {
+  _id: string;
+  name: string;
+  username: string | null;
+  role: 'OWNER' | 'MEMBER';
+  isClinical: boolean;
+  lastLoginAt: string | null;
+  mustChangePassword: boolean;
+}
+
+export interface CreateClinicUserPayload {
+  name: string;
+  username: string;
+  role?: 'OWNER' | 'MEMBER';
+  isClinical?: boolean;
+}
 
 export interface PasswordResetRequestItem {
   _id: string;

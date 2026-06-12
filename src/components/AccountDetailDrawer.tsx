@@ -6,10 +6,10 @@ import {
   Banner,
   ClinicLogo,
   ConsoleMetric,
-  CopyField,
   PayBadge,
   SectionTitle,
 } from './common/primitives';
+import { ClinicUsersSection } from './ClinicUsersSection';
 import {
   adminClinicsApi,
   type ClinicListItem,
@@ -223,12 +223,6 @@ export function AccountDetailDrawer() {
     onSuccess: () => {
       showToast(`${clinic?.name ?? ''} reactivado`);
       refreshAll();
-    },
-  });
-  const resetCredsMutation = useMutation({
-    mutationFn: () => adminClinicsApi.resetCredentials(clinicId!),
-    onSuccess: data => {
-      showToast(`Contraseña temporal generada: ${data.tempPassword}`);
     },
   });
   const impersonateMutation = useMutation({
@@ -485,20 +479,7 @@ export function AccountDetailDrawer() {
                   </div>
                 )}
 
-                <SectionTitle style={{ marginTop: 18 }}>Credenciales</SectionTitle>
-                <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <CopyField value={c.slug} mono />
-                  </div>
-                  <button
-                    className="btn btn--secondary btn--icon"
-                    title="Generar nueva contraseña"
-                    onClick={() => resetCredsMutation.mutate()}
-                    disabled={resetCredsMutation.isPending}
-                  >
-                    <Icon name="refresh" size={14} />
-                  </button>
-                </div>
+                <ClinicUsersSection clinicId={clinicId} clinicName={c.name} />
               </div>
 
               {/* footer */}
