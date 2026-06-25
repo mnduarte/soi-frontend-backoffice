@@ -7,7 +7,7 @@ import {
   CopyField,
   initialsOf,
 } from '../components/common/primitives';
-import { adminClinicsApi, type LogoStyle } from '../api/admin-clinics';
+import { adminClinicsApi, type LogoStyle, type DoctorTitle } from '../api/admin-clinics';
 import { useUIStore } from '../store/ui.store';
 import { slugify } from '../lib/format';
 
@@ -40,6 +40,7 @@ export default function NewAccountPage() {
 
   const [clinic, setClinic] = useState('');
   const [doctor, setDoctor] = useState('');
+  const [doctorTitle, setDoctorTitle] = useState<DoctorTitle>('DR');
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -71,6 +72,7 @@ export default function NewAccountPage() {
   // Default WhatsApp message body — editable. Re-derived live while the user
   // hasn't typed anything, frozen once they edit.
   const firstName = doctor.replace(/^(dra|dr)\.?\s*/i, '').split(/\s+/)[0] || '';
+  const titlePrefix = doctorTitle === 'DR' ? 'Dr. ' : doctorTitle === 'DRA' ? 'Dra. ' : '';
   const defaultMsg = useMemo(
     () =>
       `¡Hola${firstName ? ' ' + firstName : ''}! 👋 Te damos la bienvenida a SOI (Sistema Odontológico Integral) para tu consultorio.
@@ -93,6 +95,7 @@ Al entrar vas a poder cambiar la contraseña. ¡Cualquier duda escribinos!`,
       adminClinicsApi.create({
         name: clinic.trim(),
         doctorName: doctor.trim(),
+        doctorTitle,
         city: city.trim() || undefined,
         phone: phone.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
@@ -171,12 +174,25 @@ Al entrar vas a poder cambiar la contraseña. ¡Cualquier duda escribinos!`,
                   />
                 </Field>
                 <Field label="Doctor/a a cargo" req>
-                  <input
-                    className="input"
-                    placeholder="Ej. Dra. Renata Acosta"
-                    value={doctor}
-                    onChange={e => setDoctor(e.target.value)}
-                  />
+                  <div className="row" style={{ gap: 8 }}>
+                    <select
+                      className="input"
+                      value={doctorTitle}
+                      onChange={e => setDoctorTitle(e.target.value as DoctorTitle)}
+                      style={{ width: 120, flexShrink: 0 }}
+                    >
+                      <option value="DR">Dr.</option>
+                      <option value="DRA">Dra.</option>
+                      <option value="NONE">Asistente</option>
+                    </select>
+                    <input
+                      className="input"
+                      placeholder="Ej. Renata Acosta"
+                      value={doctor}
+                      onChange={e => setDoctor(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                  </div>
                 </Field>
               </div>
               <div className="form-row form-row--2">
@@ -378,7 +394,7 @@ Al entrar vas a poder cambiar la contraseña. ¡Cualquier duda escribinos!`,
                 <div
                   style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}
                 >
-                  {doctor || 'Doctor/a'}
+                  {doctor ? `${titlePrefix}${doctor}` : 'Doctor/a'}
                 </div>
                 <div
                   style={{ height: 34, borderRadius: 6, background: 'var(--bg-muted)', marginBottom: 8 }}

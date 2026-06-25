@@ -54,9 +54,12 @@ export interface AdminSettings {
   trialDays: number;
 }
 
+export type DoctorTitle = 'DR' | 'DRA' | 'NONE';
+
 export interface CreateClinicAccountPayload {
   name: string;
   doctorName: string;
+  doctorTitle?: DoctorTitle;
   city?: string;
   phone?: string;
   contactEmail?: string;
@@ -202,6 +205,7 @@ export interface ClinicUser {
   _id: string;
   name: string;
   username: string | null;
+  title?: DoctorTitle;
   role: 'OWNER' | 'MEMBER';
   isClinical: boolean;
   lastLoginAt: string | null;
@@ -211,6 +215,7 @@ export interface ClinicUser {
 export interface CreateClinicUserPayload {
   name: string;
   username: string;
+  title?: DoctorTitle;
   role?: 'OWNER' | 'MEMBER';
   isClinical?: boolean;
 }

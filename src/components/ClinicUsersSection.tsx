@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './common/Icon';
 import { SectionTitle } from './common/primitives';
-import { adminClinicsApi, type ClinicUser } from '../api/admin-clinics';
+import { adminClinicsApi, type ClinicUser, type DoctorTitle } from '../api/admin-clinics';
 import { useUIStore } from '../store/ui.store';
 import { formatLastSeen } from '../lib/format';
 
@@ -44,6 +44,7 @@ export function ClinicUsersSection({
   const [form, setForm] = useState({
     name: '',
     username: '',
+    title: 'DR' as DoctorTitle,
     role: 'MEMBER' as 'OWNER' | 'MEMBER',
     isClinical: true,
   });
@@ -60,13 +61,14 @@ export function ClinicUsersSection({
       adminClinicsApi.createUser(clinicId, {
         name: form.name.trim(),
         username: form.username.trim(),
+        title: form.title,
         role: form.role,
         isClinical: form.isClinical,
       }),
     onSuccess: data => {
       setCred({ username: data.user.username ?? form.username.trim(), tempPassword: data.tempPassword });
       setAdding(false);
-      setForm({ name: '', username: '', role: 'MEMBER', isClinical: true });
+      setForm({ name: '', username: '', title: 'DR', role: 'MEMBER', isClinical: true });
       invalidate();
     },
     onError: e => showToast(pickError(e, 'No se pudo crear el usuario')),
@@ -182,6 +184,16 @@ export function ClinicUsersSection({
           <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
             <select
               className="input"
+              value={form.title}
+              onChange={e => setForm({ ...form, title: e.target.value as DoctorTitle })}
+              style={{ flex: 1 }}
+            >
+              <option value="DR">Dr.</option>
+              <option value="DRA">Dra.</option>
+              <option value="NONE">Asistente (sin título)</option>
+            </select>
+            <select
+              className="input"
               value={form.role}
               onChange={e => setForm({ ...form, role: e.target.value as 'OWNER' | 'MEMBER' })}
               style={{ flex: 1 }}
@@ -233,7 +245,7 @@ export function ClinicUsersSection({
               >
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {u.name}
+                    {(u.title === 'DR' ? 'Dr. ' : u.title === 'DRA' ? 'Dra. ' : '') + u.name}
                     <span
                       style={{
                         fontSize: 10.5,
