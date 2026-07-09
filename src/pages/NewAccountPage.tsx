@@ -75,12 +75,12 @@ export default function NewAccountPage() {
   const titlePrefix = doctorTitle === 'DR' ? 'Dr. ' : doctorTitle === 'DRA' ? 'Dra. ' : '';
   const defaultMsg = useMemo(
     () =>
-      `¡Hola${firstName ? ' ' + firstName : ''}! 👋 Te damos la bienvenida a SOI (Sistema Odontológico Integral) para tu consultorio.
+      `¡Hola${firstName ? ' ' + firstName : ''}! Te damos la bienvenida a SOI (Sistema Odontológico Integral) para tu consultorio.
 
 Tu acceso:
-🔗 ${inviteLink}
-👤 Usuario: ${slug || '—'}
-🔑 Contraseña: ${password}
+Link: ${inviteLink}
+Usuario: ${slug || '—'}
+Contraseña: ${password}
 
 Al entrar vas a poder cambiar la contraseña. ¡Cualquier duda escribinos!`,
     [firstName, inviteLink, slug, password],

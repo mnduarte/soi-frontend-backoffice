@@ -18,10 +18,10 @@ function pickError(e: unknown, fallback: string): string {
 // WhatsApp so the admin picks the recipient (users don't have a phone on file).
 function waLink(clinicName: string, username: string, tempPassword: string): string {
   const msg =
-    `¡Hola! 👋 Te damos acceso a SOI para ${clinicName}.\n\n` +
-    `🔗 ${CORE_APP_URL}/login?u=${username}\n` +
-    `👤 Usuario: ${username}\n` +
-    `🔑 Contraseña: ${tempPassword}\n\n` +
+    `¡Hola! Te damos acceso a SOI para ${clinicName}.\n\n` +
+    `Link: ${CORE_APP_URL}/login?u=${username}\n` +
+    `Usuario: ${username}\n` +
+    `Contraseña: ${tempPassword}\n\n` +
     `Al entrar vas a poder cambiar la contraseña. ¡Cualquier duda escribinos!`;
   return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }

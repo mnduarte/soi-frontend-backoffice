@@ -53,7 +53,7 @@ export function PasswordResetDrawer() {
       const phone = item.clinic?.phone?.replace(/\D/g, '');
       const username = item.user?.username ?? item.identifier;
       const msg =
-        `Hola ${item.user?.name?.split(' ')[0] ?? ''} 👋\n\n` +
+        `Hola ${item.user?.name?.split(' ')[0] ?? ''},\n\n` +
         `Te generamos una contraseña temporal para que entres a SOI.\n\n` +
         `Usuario: ${username}\n` +
         `Contraseña: ${tempPassword}\n\n` +
