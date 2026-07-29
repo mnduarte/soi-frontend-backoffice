@@ -13,7 +13,6 @@ import { ClinicUsersSection } from './ClinicUsersSection';
 import {
   adminClinicsApi,
   type ClinicListItem,
-  type PaymentStatus,
 } from '../api/admin-clinics';
 import { useUIStore } from '../store/ui.store';
 import { formatDateLong, formatLastSeen, money } from '../lib/format';
@@ -240,9 +239,8 @@ export function AccountDetailDrawer() {
   const c: ClinicListItem | undefined = clinic;
   const ls = formatLastSeen(c?.lastLoginAt ?? null);
   const due = c?.subscriptionEndsAt ?? null;
-  const pendingPayActions: PaymentStatus[] = ['due-soon', 'overdue', 'grace-end'];
-  const showPayActions =
-    c && pendingPayActions.includes(c.paymentStatus) && c.status !== 'TRIAL';
+  // Show payment/extension actions for any clinic (TRIAL, ACTIVE, or SUSPENDED).
+  const showPayActions = Boolean(c);
 
   const dirty =
     !!c &&
