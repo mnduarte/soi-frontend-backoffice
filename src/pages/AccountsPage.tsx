@@ -10,10 +10,8 @@ import {
   AccStatusBadge,
   Banner,
   ClinicLogo,
-  ConsoleMetric,
   LastSeenCell,
   PayBadge,
-  money,
 } from '../components/common/primitives';
 import { Icon } from '../components/common/Icon';
 import { useUIStore } from '../store/ui.store';
@@ -22,6 +20,15 @@ import { useUIStore } from '../store/ui.store';
 // invite-link setup flow yet, regardless of subscription status.
 type StatusFilter = 'all' | 'pending' | ClinicStatus;
 type PayFilterKey = PaymentStatus | null;
+
+// Fecha y hora exactas de la ultima conexion (la etiqueta relativa sola no
+// alcanza cuando hay que cotejar con otra cosa).
+function fechaHora(iso: string): string {
+  return new Date(iso).toLocaleString('es-AR', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'all',       label: 'Todos' },
@@ -76,41 +83,6 @@ export default function AccountsPage() {
 
   return (
     <div className="content fade-in">
-      {/* metrics */}
-      <div className="r-metrics" style={{ marginBottom: 20 }}>
-        <ConsoleMetric
-          label="Consultorios activos"
-          value={metrics?.activeClinics ?? 0}
-          sub={`${metrics?.pendingActivationCount ?? 0} sin activar · ${metrics?.suspendedClinics ?? 0} suspendidos`}
-          icon="building"
-          tone="brand"
-        />
-        <ConsoleMetric
-          label="Ingreso mensual (MRR)"
-          value={money(metrics?.mrr ?? 0)}
-          sub={`${money(metrics?.planPriceMonthly ?? 0)} / consultorio`}
-          icon="trendUp"
-          tone="success"
-        />
-        <ConsoleMetric
-          label="Pagos vencidos"
-          value={(metrics?.overdueCount ?? 0) + (metrics?.graceEndCount ?? 0)}
-          sub={
-            (metrics?.overdueCount ?? 0) + (metrics?.graceEndCount ?? 0)
-              ? 'Requieren acción'
-              : 'Todo al día'
-          }
-          icon="alert"
-          tone={(metrics?.overdueCount ?? 0) + (metrics?.graceEndCount ?? 0) ? 'danger' : 'default'}
-        />
-        <ConsoleMetric
-          label="Altas del mes"
-          value={metrics?.newThisMonth ?? 0}
-          sub="Últimos 30 días"
-          icon="userPlus"
-        />
-      </div>
-
       {/* morosidad banners */}
       <div className="col" style={{ gap: 10, marginBottom: 20 }}>
         {(metrics?.graceEndCount ?? 0) > 0 && (
@@ -163,15 +135,20 @@ export default function AccountsPage() {
             flexWrap: 'wrap',
           }}
         >
-          <div className="tabs" style={{ borderBottom: 'none', padding: 0 }}>
+          {/* Chips en vez de pestanas: "Sin activar" y su contador se partian
+              en tres renglones contra el subrayado. Una pastilla por filtro no
+              se rompe y el numero entra adentro, junto a lo que cuenta. */}
+          <div className="acc-chips">
             {STATUS_TABS.map(t => (
-              <div
+              <button
                 key={t.key}
-                className={`tab ${statusFilter === t.key ? 'is-active' : ''}`}
+                type="button"
+                className={`acc-chip ${statusFilter === t.key ? 'is-on' : ''}`}
                 onClick={() => setStatusFilter(t.key)}
               >
-                {t.label} <span className="tab__count">{tabCounts[t.key]}</span>
-              </div>
+                {t.label}
+                <span className="acc-chip__n">{tabCounts[t.key]}</span>
+              </button>
             ))}
           </div>
           <div className="spacer" />
@@ -184,29 +161,14 @@ export default function AccountsPage() {
               <Icon name="x" size={13} /> Filtro de pago
             </button>
           )}
-          <button className="btn btn--secondary btn--sm">
-            <Icon name="filter" size={13} /> Filtros
-          </button>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Consultorio</th>
-                <th>Usuario</th>
-                <th>Estado</th>
-                <th>Último acceso</th>
-                <th style={{ textAlign: 'right' }}>Pacientes</th>
-                <th>Pago</th>
-                <th style={{ width: 40 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(c => (
-                <ClinicRow key={c._id} clinic={c} onOpen={() => openDrawer(c._id)} />
-              ))}
-            </tbody>
-          </table>
+        {/* Tarjetas en vez de tabla: con siete columnas habia que deslizarse
+            para leer una fila entera, y las de la derecha (pago, ultimo acceso)
+            son justo las que se miran. Apilado entra todo de una. */}
+        <div className="acc-list">
+          {filtered.map(c => (
+            <ClinicCard key={c._id} clinic={c} onOpen={() => openDrawer(c._id)} />
+          ))}
         </div>
         {filtered.length === 0 && (
           <div
@@ -225,7 +187,7 @@ export default function AccountsPage() {
   );
 }
 
-function ClinicRow({
+function ClinicCard({
   clinic,
   onOpen,
 }: {
@@ -239,43 +201,44 @@ function ClinicRow({
     .join('')
     .toUpperCase();
   return (
-    <tr onClick={onOpen}>
-      <td>
-        <div className="row" style={{ gap: 11 }}>
-          <ClinicLogo
-            color={clinic.brandColor}
-            size={34}
-            logoStyle={clinic.logoStyle}
-            initials={initials}
-          />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 500, fontSize: 13 }}>{clinic.name}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
-              {clinic.doctorName ?? '—'} · {clinic.city ?? '—'}
-            </div>
-          </div>
-        </div>
-      </td>
-      <td>
-        <span className="mono" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
-          {clinic.slug}
-        </span>
-      </td>
-      <td><AccStatusBadge status={clinic.status} activated={clinic.activated} /></td>
-      <td><LastSeenCell lastLoginAt={clinic.lastLoginAt} /></td>
-      <td style={{ textAlign: 'right' }} className="text-tabular">
-        {clinic.patientsCount ? clinic.patientsCount.toLocaleString('es-AR') : '—'}
-      </td>
-      <td>
-        <PayBadge paymentStatus={clinic.paymentStatus} daysToDue={clinic.daysToDue} />
-      </td>
-      <td>
-        <Icon
-          name="chevronRight"
-          size={15}
-          style={{ color: 'var(--text-tertiary)' }}
+    <button type="button" className="acc-card" onClick={onOpen}>
+      <div className="acc-card__head">
+        <ClinicLogo
+          color={clinic.brandColor}
+          size={38}
+          logoStyle={clinic.logoStyle}
+          initials={initials}
         />
-      </td>
-    </tr>
+        <div className="acc-card__id">
+          <div className="acc-card__name">{clinic.name}</div>
+          <div className="acc-card__sub">
+            {clinic.doctorName ?? '—'} · {clinic.city ?? '—'}
+          </div>
+          <div className="acc-card__slug mono">{clinic.slug}</div>
+        </div>
+        <Icon name="chevronRight" size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+      </div>
+
+      <div className="acc-card__badges">
+        <AccStatusBadge status={clinic.status} activated={clinic.activated} />
+        <PayBadge paymentStatus={clinic.paymentStatus} daysToDue={clinic.daysToDue} />
+      </div>
+
+      <div className="acc-card__foot">
+        {/* "hace 1 dia" para el pantallazo y la fecha exacta al lado, que es lo
+            que sirve cuando hay que cruzarlo con algo (un reclamo, un pago). */}
+        <span className="acc-card__seen">
+          <LastSeenCell lastLoginAt={clinic.lastLoginAt} />
+          {clinic.lastLoginAt && (
+            <span className="acc-card__exact mono">{fechaHora(clinic.lastLoginAt)}</span>
+          )}
+        </span>
+        <span className="acc-card__pac">
+          {clinic.patientsCount
+            ? `${clinic.patientsCount.toLocaleString('es-AR')} pacientes`
+            : 'Sin pacientes'}
+        </span>
+      </div>
+    </button>
   );
 }

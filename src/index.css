@@ -898,3 +898,127 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .timeline__dot--current { background: var(--brand-primary); }
 .timeline__date { padding-left: 0; }
 .timeline__body { padding-left: 18px; }
+
+
+/* ============================================================
+   LISTA DE CONSULTORIOS (tarjetas)
+   La tabla tenia siete columnas: para leer una cuenta entera habia que
+   deslizarse a lo ancho, y lo que se mira —estado de pago, ultimo acceso—
+   quedaba justo del lado que no se ve. Apiladas entra todo de una.
+   ============================================================ */
+.acc-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 16px;
+}
+/* Es un <button>: toda la tarjeta abre la cuenta, y se llega con teclado. */
+.acc-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s, box-shadow 0.14s;
+}
+.acc-card:hover {
+  border-color: var(--brand-primary);
+  background: var(--bg-hover);
+  box-shadow: var(--shadow-sm);
+}
+.acc-card__head { display: flex; align-items: flex-start; gap: 12px; }
+.acc-card__id { flex: 1; min-width: 0; }
+.acc-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acc-card__sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acc-card__slug {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acc-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-left: 50px;   /* alineado con el texto, debajo del logo */
+}
+.acc-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 9px 0 0 50px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+}
+.acc-card__pac { color: var(--text-tertiary); white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .acc-list { padding: 12px; }
+  /* En pantalla angosta el sangrado bajo el logo se come el ancho util */
+  .acc-card__badges, .acc-card__foot { padding-left: 0; }
+}
+
+
+/* Filtros de estado como pastillas. Como pestanas, "Sin activar" mas su
+   contador no entraban a lo ancho y se partian en tres renglones contra el
+   subrayado. */
+.acc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.acc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.acc-chip:hover { color: var(--text-primary); border-color: var(--brand-primary); }
+.acc-chip.is-on {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
+}
+/* El contador va adentro de la pastilla, pegado a lo que cuenta */
+.acc-chip__n {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-app);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+}
+.acc-chip.is-on .acc-chip__n { background: rgb(255 255 255 / 0.22); color: #fff; }
+
+/* Ultima conexion: relativa arriba, exacta abajo en tono menor */
+.acc-card__seen { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.acc-card__exact { font-size: 11.5px; color: var(--text-tertiary); }
