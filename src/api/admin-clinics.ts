@@ -30,6 +30,52 @@ export interface ClinicListItem {
   // True once the OWNER has run setupPassword (i.e. the invite-link "create
   // your password" flow). Drives the "Sin activar" badge in the BO.
   activated: boolean;
+  /** Precio negociado con ESTE consultorio. null = usa el de lista. */
+  planPriceMonthly: number | null;
+  /** Lo que realmente paga: el suyo o el de lista. */
+  effectivePrice: number;
+
+  // ---- Débito automático (Mercado Pago) ----
+  /** null = nunca se creó. 'pending' = falta que el dentista autorice. */
+  mpPreapprovalStatus: MpPreapprovalStatus | null;
+  /** Link para autorizar. Solo mientras está pendiente. */
+  mpInitPoint: string | null;
+  mpFirstChargeAt: string | null;
+  /** Último cobro rechazado (tarjeta vencida, sin fondos…). */
+  mpLastFailureAt: string | null;
+}
+
+export type MpPreapprovalStatus = 'pending' | 'authorized' | 'paused' | 'cancelled';
+
+export interface MpSubscriptionResult {
+  preapprovalId: string;
+  status: MpPreapprovalStatus;
+  initPoint?: string;
+  firstChargeAt: string;
+  amount: number;
+}
+
+export type ClinicPaymentMethod = 'CASH' | 'TRANSFER' | 'MERCADO_PAGO' | 'OTHER';
+
+export interface ClinicPayment {
+  _id: string;
+  clinicId: string;
+  amount: number;
+  paidAt: string;
+  method: ClinicPaymentMethod;
+  periodFrom: string;
+  periodTo: string;
+  notes?: string;
+  mpPaymentId?: string;
+  createdAt: string;
+}
+
+export interface RecordPaymentInput {
+  days?: number;
+  amount?: number;
+  paidAt?: string;
+  method?: ClinicPaymentMethod;
+  notes?: string;
 }
 
 export interface AdminMetrics {
@@ -123,9 +169,38 @@ export const adminClinicsApi = {
       .post<{ data: ClinicListItem }>(`/admin/clinics/${id}/extend-subscription`, { days })
       .then(r => r.data.data),
 
-  recordPayment: (id: string, days?: number) =>
+  recordPayment: (id: string, dto: RecordPaymentInput = {}) =>
     adminClient
-      .post<{ data: ClinicListItem }>(`/admin/clinics/${id}/payment`, days ? { days } : {})
+      .post<{ data: ClinicListItem }>(`/admin/clinics/${id}/payment`, dto)
+      .then(r => r.data.data),
+
+  listPayments: (id: string) =>
+    adminClient
+      .get<{ data: ClinicPayment[] }>(`/admin/clinics/${id}/payments`)
+      .then(r => r.data.data),
+
+  deletePayment: (id: string, paymentId: string) =>
+    adminClient.delete(`/admin/clinics/${id}/payments/${paymentId}`),
+
+  createMpSubscription: (id: string) =>
+    adminClient
+      .post<{ data: MpSubscriptionResult }>(`/admin/clinics/${id}/mp-subscription`)
+      .then(r => r.data.data),
+
+  cancelMpSubscription: (id: string) =>
+    adminClient.delete(`/admin/clinics/${id}/mp-subscription`),
+
+  syncMpSubscription: (id: string) =>
+    adminClient
+      .post<{ data: { status: MpPreapprovalStatus; nextPaymentDate: string | null } }>(
+        `/admin/clinics/${id}/mp-subscription/sync`,
+      )
+      .then(r => r.data.data),
+
+  // null devuelve el consultorio al precio de lista.
+  updatePrice: (id: string, planPriceMonthly: number | null) =>
+    adminClient
+      .patch<{ data: ClinicListItem }>(`/admin/clinics/${id}/price`, { planPriceMonthly })
       .then(r => r.data.data),
 
   suspend: (id: string) =>

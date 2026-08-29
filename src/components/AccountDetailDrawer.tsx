@@ -12,6 +12,8 @@ import {
 import { ClinicUsersSection } from './ClinicUsersSection';
 import {
   adminClinicsApi,
+  type ClinicPaymentMethod,
+  type MpPreapprovalStatus,
   type ClinicListItem,
 } from '../api/admin-clinics';
 import { useUIStore } from '../store/ui.store';
@@ -122,6 +124,25 @@ function PaymentNotice({ clinic }: { clinic: ClinicListItem }) {
 }
 
 // =============================================================================
+const METHOD_LABEL: Record<ClinicPaymentMethod, string> = {
+  CASH: 'Efectivo',
+  TRANSFER: 'Transferencia',
+  MERCADO_PAGO: 'Mercado Pago',
+  OTHER: 'Otro',
+};
+
+const MP_LABEL: Record<MpPreapprovalStatus, string> = {
+  pending: 'Falta que autorice',
+  authorized: 'Activo',
+  paused: 'Pausado',
+  cancelled: 'Cancelado',
+};
+
+function todayYMD(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // DetailRow — label/value row used in the body sections.
 // =============================================================================
 
@@ -181,6 +202,7 @@ export function AccountDetailDrawer() {
     qc.invalidateQueries({ queryKey: ['admin-clinics'] });
     qc.invalidateQueries({ queryKey: ['admin-metrics'] });
     qc.invalidateQueries({ queryKey: ['admin-clinic', clinicId] });
+    qc.invalidateQueries({ queryKey: ['admin-clinic-payments', clinicId] });
   };
 
   const updateMutation = useMutation({
@@ -196,12 +218,68 @@ export function AccountDetailDrawer() {
     },
   });
 
+  // Historial de pagos del consultorio.
+  const { data: payments = [] } = useQuery({
+    queryKey: ['admin-clinic-payments', clinicId],
+    queryFn: () => adminClinicsApi.listPayments(clinicId!),
+    enabled: !!clinicId,
+  });
+
+  // Alta de pago: el monto viene precargado con lo que paga este consultorio,
+  // porque el caso normal es "pagó lo de siempre". Editable para los que no.
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(todayYMD());
+  const [payMethod, setPayMethod] = useState<ClinicPaymentMethod>('TRANSFER');
+  const [payNotes, setPayNotes] = useState('');
+
   const paymentMutation = useMutation({
-    mutationFn: () => adminClinicsApi.recordPayment(clinicId!),
+    mutationFn: () =>
+      adminClinicsApi.recordPayment(clinicId!, {
+        amount: payAmount ? Number(payAmount) : undefined,
+        paidAt: new Date(`${payDate}T12:00:00`).toISOString(),
+        method: payMethod,
+        notes: payNotes.trim() || undefined,
+      }),
     onSuccess: () => {
       showToast(`Pago registrado — ${clinic?.name ?? ''}`);
+      setPayOpen(false);
+      setPayNotes('');
       refreshAll();
     },
+  });
+
+  const delPaymentMutation = useMutation({
+    mutationFn: (paymentId: string) => adminClinicsApi.deletePayment(clinicId!, paymentId),
+    onSuccess: () => { showToast('Pago borrado'); refreshAll(); },
+  });
+
+  // ---- Débito automático ----
+  const mpCreateMutation = useMutation({
+    mutationFn: () => adminClinicsApi.createMpSubscription(clinicId!),
+    onSuccess: r => {
+      showToast('Suscripción creada — mandale el link al consultorio');
+      if (r.initPoint) void navigator.clipboard?.writeText(r.initPoint).catch(() => {});
+      refreshAll();
+    },
+    onError: () => showToast('No se pudo crear la suscripción'),
+  });
+  const mpCancelMutation = useMutation({
+    mutationFn: () => adminClinicsApi.cancelMpSubscription(clinicId!),
+    onSuccess: () => { showToast('Débito automático cancelado'); refreshAll(); },
+    onError: () => showToast('No se pudo cancelar'),
+  });
+  const mpSyncMutation = useMutation({
+    mutationFn: () => adminClinicsApi.syncMpSubscription(clinicId!),
+    onSuccess: r => { showToast(`Estado en Mercado Pago: ${MP_LABEL[r.status]}`); refreshAll(); },
+    onError: () => showToast('No se pudo consultar'),
+  });
+
+  // Precio propio del consultorio. Vacío = vuelve al de lista.
+  const [priceEdit, setPriceEdit] = useState<string | null>(null);
+  const priceMutation = useMutation({
+    mutationFn: (v: number | null) => adminClinicsApi.updatePrice(clinicId!, v),
+    onSuccess: () => { showToast('Precio actualizado'); setPriceEdit(null); refreshAll(); },
   });
   const extendMutation = useMutation({
     mutationFn: () => adminClinicsApi.extendSubscription(clinicId!, 7),
@@ -441,7 +519,51 @@ export function AccountDetailDrawer() {
 
                 <SectionTitle>Facturación</SectionTitle>
                 <div style={{ marginBottom: 8 }}>
-                  <DetailRow label="Plan">Mensual · {money(28000)}</DetailRow>
+                  {/* Estaba fijo en 28.000 sin importar lo configurado: mostraba
+                      un numero que podia no ser el que se cobraba. */}
+                  <DetailRow label="Plan">
+                    {priceEdit === null ? (
+                      <span className="row" style={{ gap: 8 }}>
+                        Mensual · {money(c.effectivePrice)}
+                        {c.planPriceMonthly == null && (
+                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                            (precio de lista)
+                          </span>
+                        )}
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => setPriceEdit(String(c.planPriceMonthly ?? ''))}
+                        >
+                          <Icon name="edit" size={12} /> Cambiar
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="row" style={{ gap: 6 }}>
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          autoFocus
+                          placeholder={String(c.effectivePrice)}
+                          value={priceEdit}
+                          onChange={e => setPriceEdit(e.target.value.replace(/[^\d]/g, ''))}
+                          style={{ width: 110, height: 30 }}
+                        />
+                        <button
+                          className="btn btn--primary btn--sm"
+                          onClick={() => priceMutation.mutate(priceEdit ? Number(priceEdit) : null)}
+                          disabled={priceMutation.isPending}
+                        >
+                          <Icon name="check" size={12} />
+                        </button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setPriceEdit(null)}>
+                          <Icon name="x" size={13} />
+                        </button>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                          vacío = precio de lista
+                        </span>
+                      </span>
+                    )}
+                  </DetailRow>
                   <DetailRow
                     label={
                       c.paymentStatus === 'overdue' || c.paymentStatus === 'grace-end'
@@ -456,13 +578,184 @@ export function AccountDetailDrawer() {
                   </DetailRow>
                 </div>
 
-                {showPayActions && (
+                {/* Formulario de alta. Se abre al tocar "Registrar pago": antes
+                    el boton cobraba de una y no dejaba rastro de cuanto ni como. */}
+                {payOpen && (
+                  <div className="pay-form">
+                    <div className="pay-form__row">
+                      <label className="pay-form__f">
+                        <span>Monto</span>
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          autoFocus
+                          placeholder={String(c.effectivePrice)}
+                          value={payAmount}
+                          onChange={e => setPayAmount(e.target.value.replace(/[^\d]/g, ''))}
+                        />
+                      </label>
+                      <label className="pay-form__f">
+                        <span>Fecha</span>
+                        <input
+                          type="date"
+                          className="input"
+                          value={payDate}
+                          onChange={e => setPayDate(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label className="pay-form__f">
+                      <span>Medio</span>
+                      <div className="acc-chips">
+                        {(Object.keys(METHOD_LABEL) as ClinicPaymentMethod[]).map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={`acc-chip ${payMethod === m ? 'is-on' : ''}`}
+                            onClick={() => setPayMethod(m)}
+                          >
+                            {METHOD_LABEL[m]}
+                          </button>
+                        ))}
+                      </div>
+                    </label>
+                    <label className="pay-form__f">
+                      <span>Nota (opcional)</span>
+                      <input
+                        className="input"
+                        placeholder="Ej: pagó los dos meses juntos"
+                        value={payNotes}
+                        onChange={e => setPayNotes(e.target.value)}
+                      />
+                    </label>
+                    <div className="row" style={{ gap: 8, marginTop: 4 }}>
+                      <button
+                        className="btn btn--primary btn--sm"
+                        style={{ flex: 1 }}
+                        onClick={() => paymentMutation.mutate()}
+                        disabled={paymentMutation.isPending}
+                      >
+                        <Icon name="check" size={13} /> Guardar pago
+                      </button>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setPayOpen(false)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Débito automático. El dentista autoriza UNA vez desde el link
+                    y de ahí Mercado Pago cobra solo; el webhook asienta cada
+                    cobro y corre el vencimiento sin que nadie toque nada. */}
+                <SectionTitle>Débito automático</SectionTitle>
+                <div className="mp-box">
+                  {!c.mpPreapprovalStatus || c.mpPreapprovalStatus === 'cancelled' ? (
+                    <>
+                      <div className="mp-box__msg">
+                        Sin débito automático. Hoy hay que pedirle el pago todos los meses.
+                      </div>
+                      <button
+                        className="btn btn--primary btn--sm"
+                        onClick={() => mpCreateMutation.mutate()}
+                        disabled={mpCreateMutation.isPending || !c.contactEmail}
+                        title={c.contactEmail ? undefined : 'Necesita un email de contacto'}
+                      >
+                        <Icon name="creditCard" size={13} /> Activar débito automático
+                      </button>
+                      {!c.contactEmail && (
+                        <div className="mp-box__warn">
+                          Cargale un email de contacto: Mercado Pago lo necesita.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <DetailRow label="Estado">
+                        <span className={`mp-state is-${c.mpPreapprovalStatus}`}>
+                          {MP_LABEL[c.mpPreapprovalStatus]}
+                        </span>
+                      </DetailRow>
+                      <DetailRow label="Primer cobro">
+                        {c.mpFirstChargeAt ? formatDateLong(c.mpFirstChargeAt) : '—'}
+                      </DetailRow>
+                      {c.mpLastFailureAt && (
+                        <DetailRow label="Último rechazo">
+                          <span style={{ color: 'var(--danger)' }}>
+                            {formatDateLong(c.mpLastFailureAt)} · revisá la tarjeta con el Dr.
+                          </span>
+                        </DetailRow>
+                      )}
+                      {c.mpPreapprovalStatus === 'pending' && c.mpInitPoint && (
+                        <div className="mp-box__link">
+                          <span>Mandale este link para que autorice:</span>
+                          <button
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => {
+                              void navigator.clipboard?.writeText(c.mpInitPoint!).catch(() => {});
+                              showToast('Link copiado');
+                            }}
+                          >
+                            <Icon name="link" size={13} /> Copiar link
+                          </button>
+                        </div>
+                      )}
+                      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+                        <button
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => mpSyncMutation.mutate()}
+                          disabled={mpSyncMutation.isPending}
+                          title="Releer el estado en Mercado Pago"
+                        >
+                          <Icon name="refresh" size={13} /> Actualizar
+                        </button>
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => mpCancelMutation.mutate()}
+                          disabled={mpCancelMutation.isPending}
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          Cancelar débito
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Historial. Sin esto el sistema sabia HASTA CUANDO estaba paga
+                    una cuenta, pero no que se pago, cuando ni cuanto. */}
+                {payments.length > 0 && (
+                  <>
+                    <SectionTitle>Pagos ({payments.length})</SectionTitle>
+                    <div className="pay-list">
+                      {payments.map(pg => (
+                        <div key={pg._id} className="pay-item">
+                          <div className="pay-item__main">
+                            <span className="pay-item__amount mono">{money(pg.amount)}</span>
+                            <span className="pay-item__meta">
+                              {formatDateLong(pg.paidAt)} · {METHOD_LABEL[pg.method]}
+                            </span>
+                            {pg.notes && <span className="pay-item__note">{pg.notes}</span>}
+                          </div>
+                          <button
+                            className="btn btn--ghost btn--icon btn--sm"
+                            title="Borrar este pago"
+                            onClick={() => delPaymentMutation.mutate(pg._id)}
+                            style={{ color: 'var(--danger)' }}
+                          >
+                            <Icon name="trash" size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {showPayActions && !payOpen && (
                   <div className="row" style={{ gap: 8, marginTop: 12 }}>
                     <button
                       className="btn btn--primary btn--sm"
                       style={{ flex: 1 }}
-                      onClick={() => paymentMutation.mutate()}
-                      disabled={paymentMutation.isPending}
+                      onClick={() => { setPayAmount(''); setPayDate(todayYMD()); setPayOpen(true); }}
                     >
                       <Icon name="check" size={13} /> Registrar pago
                     </button>
