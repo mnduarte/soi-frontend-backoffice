@@ -1089,3 +1089,63 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .mp-state.is-pending    { color: var(--warning); }
 .mp-state.is-paused     { color: var(--text-tertiary); }
 .mp-state.is-cancelled  { color: var(--text-tertiary); }
+
+
+/* ---- Estado de acceso del consultorio (drawer) ----
+   Lo primero que se mira al abrir una cuenta: que ve el dentista en pantalla
+   y si puede trabajar. */
+.acceso-box {
+  margin-bottom: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-default);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.acceso-box__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acceso-box__dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+.acceso-box__txt { font-size: 13.5px; font-weight: 700; }
+.acceso-box__dias {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.acceso-box__sub { margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
+
+/* Consultorio limitado, en la lista. Terracota y sin punto: no es un estado
+   mas del mismo tipo que Activo o Al dia, es una restriccion en curso. */
+.acc-lim {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  color: var(--danger);
+  background: var(--danger-bg, transparent);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* Consecuencia del pago, antes de confirmarlo */
+.pay-form__hasta {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.pay-form__hasta b { color: var(--text-primary); }
+
+/* Como viene la prueba (drawer) */
+.trial-box {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--brand-primary);
+  border-radius: var(--radius-md);
+  background: var(--brand-primary-50, var(--bg-surface));
+}
+.trial-box__top { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--brand-primary); }
+.trial-box__sub { margin-top: 2px; font-size: 12px; color: var(--text-secondary); }

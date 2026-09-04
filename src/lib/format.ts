@@ -19,9 +19,18 @@ export function formatDateShort(iso: string | Date | null | undefined): string {
   return `${dd}/${mm}/${String(d.getFullYear()).slice(2)}`;
 }
 
-// Convert a `lastLoginAt` ISO date into a human label + flags. Mirrors the
-// prototype's boLastSeen(): "En línea ahora" / "hace N min" / "hace N días"
-// + an `online` bool (<5min) and a `stale` bool (>7d) used for muted colors.
+// Convierte una fecha ISO en etiqueta + flags: "En línea ahora" / "hace N min"
+// / "hace N días", con `online` y `stale` (>7d) para los colores apagados.
+//
+// Se alimenta de `lastSeenAt` (presencia real: la app abierta y a la vista),
+// NO de `lastLoginAt`. Con el login decía "En línea ahora" de alguien que
+// entró y cerró la notebook, y "hace 3 h" de alguien que estaba trabajando en
+// ese momento — al revés de lo que hay que saber.
+//
+// El umbral es 4 min y no 5 por una razón concreta: el backend refresca la
+// presencia como mucho cada 3 min, así que un consultorio realmente adentro
+// puede tener el dato con hasta 3 minutos de atraso. Con 5 el margen era de
+// 2 min; con 4 sigue siendo holgado y "en línea" no se estira de más.
 export function formatLastSeen(iso: string | null | undefined): {
   label: string;
   online: boolean;
@@ -29,7 +38,7 @@ export function formatLastSeen(iso: string | null | undefined): {
 } {
   if (!iso) return { label: 'Nunca', online: false, stale: true };
   const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (mins < 5) return { label: 'En línea ahora', online: true, stale: false };
+  if (mins < 4) return { label: 'En línea ahora', online: true, stale: false };
   if (mins < 60) return { label: `hace ${mins} min`, online: false, stale: false };
   if (mins < 60 * 24) return { label: `hace ${Math.round(mins / 60)} h`, online: false, stale: false };
   const d = Math.round(mins / (60 * 24));

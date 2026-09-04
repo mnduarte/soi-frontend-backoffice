@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from './common/Icon';
 import {
   AccStatusBadge,
-  Banner,
   ClinicLogo,
   ConsoleMetric,
   PayBadge,
@@ -14,6 +13,7 @@ import {
   adminClinicsApi,
   type ClinicPaymentMethod,
   type MpPreapprovalStatus,
+  type AccessLevel,
   type ClinicListItem,
 } from '../api/admin-clinics';
 import { useUIStore } from '../store/ui.store';
@@ -49,79 +49,6 @@ const EDIT_INPUT: CSSProperties = {
 // the dentist sees from inside their app.
 // =============================================================================
 
-function PaymentNotice({ clinic }: { clinic: ClinicListItem }) {
-  const { paymentStatus, daysToDue, subscriptionEndsAt, trialEndsAt, status } = clinic;
-  // Trials track against trialEndsAt; everything else uses subscriptionEndsAt.
-  // We surface this as a "trial" prefix so the operator knows what's about to
-  // happen (end of free period vs missed payment).
-  const isTrial = status === 'TRIAL';
-  const dueDate = isTrial ? trialEndsAt : subscriptionEndsAt;
-  const dueLabel = isTrial ? 'Fin de la prueba' : 'Próximo vencimiento';
-
-  if (paymentStatus === 'pending') {
-    return (
-      <Banner
-        tone="info"
-        icon="alert"
-        title="Cuenta sin activar"
-        body="Todavía no se registró un pago. La cuenta está en período de prueba."
-      />
-    );
-  }
-  if (paymentStatus === 'ok') {
-    return (
-      <Banner
-        tone="info"
-        icon="checkCircle"
-        title={isTrial ? 'En período de prueba' : 'Pago al día'}
-        body={`${dueLabel}: ${formatDateLong(dueDate)} · faltan ${daysToDue ?? 0} días.`}
-      />
-    );
-  }
-  if (paymentStatus === 'due-soon') {
-    return (
-      <Banner
-        tone="warning"
-        icon="clock"
-        title={
-          isTrial
-            ? `La prueba termina en ${daysToDue ?? 0} ${(daysToDue ?? 0) === 1 ? 'día' : 'días'}`
-            : `Vence en ${daysToDue ?? 0} ${(daysToDue ?? 0) === 1 ? 'día' : 'días'}`
-        }
-        body={`El consultorio ve un aviso amarillo. ${dueLabel}: ${formatDateLong(dueDate)}.`}
-      />
-    );
-  }
-  if (paymentStatus === 'overdue') {
-    const over = Math.abs(daysToDue ?? 0);
-    return (
-      <Banner
-        tone="warningStrong"
-        icon="alert"
-        title={
-          isTrial
-            ? `Prueba terminada hace ${over} ${over === 1 ? 'día' : 'días'}`
-            : `Pago vencido hace ${over} ${over === 1 ? 'día' : 'días'}`
-        }
-        body={
-          isTrial
-            ? 'La cuenta sigue activa dentro de la tolerancia. Coordiná el primer pago para no perder los datos.'
-            : 'Dentro de la tolerancia. Se le pide regularizar la situación.'
-        }
-      />
-    );
-  }
-  // grace-end
-  const over = Math.abs(daysToDue ?? 0);
-  return (
-    <Banner
-      tone="danger"
-      icon="ban"
-      title={`${isTrial ? 'Prueba terminada' : 'Vencido'} hace ${over} días — suspensión inminente`}
-      body="Se le avisó que en los próximos días no podrá iniciar sesión. Suspendé o extendé la prórroga."
-    />
-  );
-}
 
 // =============================================================================
 const METHOD_LABEL: Record<ClinicPaymentMethod, string> = {
@@ -129,6 +56,15 @@ const METHOD_LABEL: Record<ClinicPaymentMethod, string> = {
   TRANSFER: 'Transferencia',
   MERCADO_PAGO: 'Mercado Pago',
   OTHER: 'Otro',
+};
+
+/** Qué está viviendo el consultorio, dicho como lo vive él. */
+const ACCESO: Record<AccessLevel, { txt: string; sub: string; tono: string }> = {
+  ok:       { txt: 'Acceso completo',  sub: 'Sin ningún aviso en pantalla', tono: 'var(--success)' },
+  soft:     { txt: 'Acceso completo',  sub: 'Ve el aviso amarillo: "no nos figura el pago"', tono: 'var(--warning)' },
+  firm:     { txt: 'Acceso completo',  sub: 'Ve el aviso naranja, anunciando la fecha del corte', tono: '#C2410C' },
+  readonly: { txt: 'Solo lectura',     sub: 'Consulta fichas pero no puede cargar nada', tono: 'var(--danger)' },
+  blocked:  { txt: 'Sin acceso',       sub: 'No puede iniciar sesión', tono: 'var(--danger)' },
 };
 
 const MP_LABEL: Record<MpPreapprovalStatus, string> = {
@@ -232,10 +168,15 @@ export function AccountDetailDrawer() {
   const [payDate, setPayDate] = useState(todayYMD());
   const [payMethod, setPayMethod] = useState<ClinicPaymentMethod>('TRANSFER');
   const [payNotes, setPayNotes] = useState('');
+  const [payMonths, setPayMonths] = useState(1);
+  // Instante de referencia, tomado al ABRIR el formulario. Leer el reloj
+  // durante el render hace que dos renders del mismo estado den distinto.
+  const [payRef, setPayRef] = useState(() => Date.now());
 
   const paymentMutation = useMutation({
     mutationFn: () =>
       adminClinicsApi.recordPayment(clinicId!, {
+        months: payMonths,
         amount: payAmount ? Number(payAmount) : undefined,
         paidAt: new Date(`${payDate}T12:00:00`).toISOString(),
         method: payMethod,
@@ -245,6 +186,7 @@ export function AccountDetailDrawer() {
       showToast(`Pago registrado — ${clinic?.name ?? ''}`);
       setPayOpen(false);
       setPayNotes('');
+      setPayMonths(1);
       refreshAll();
     },
   });
@@ -315,7 +257,14 @@ export function AccountDetailDrawer() {
   if (!clinicId) return null;
 
   const c: ClinicListItem | undefined = clinic;
-  const ls = formatLastSeen(c?.lastLoginAt ?? null);
+  // Presencia SIN respaldo al login, a diferencia de la lista.
+  //
+  // En la lista hay una sola celda y ahí el respaldo evita que una cuenta con
+  // meses de uso figure como "Nunca". Acá al lado está "Último ingreso" con ese
+  // mismo dato: si esta caja también cayera al login, mostraría dos veces lo
+  // mismo y volvería a hacer pasar el login por actividad — que es justo lo que
+  // había que arreglar. Sin dato se dice que no hay dato.
+  const ls = c?.lastSeenAt ? formatLastSeen(c.lastSeenAt) : null;
   const due = c?.subscriptionEndsAt ?? null;
   // Show payment/extension actions for any clinic (TRIAL, ACTIVE, or SUSPENDED).
   const showPayActions = Boolean(c);
@@ -400,9 +349,190 @@ export function AccountDetailDrawer() {
 
               {/* body */}
               <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                <div style={{ marginBottom: 18 }}>
-                  <PaymentNotice clinic={c} />
-                </div>
+                {/* Cómo viene la prueba. Lo primero que se quiere saber de una
+                    cuenta nueva: desde cuándo, por qué mes va y cuándo empieza
+                    a pagar. */}
+                {c.trial && (
+                  <div className="trial-box">
+                    <div className="trial-box__top">
+                      <Icon name="calendar" size={13} />
+                      <b>
+                        {c.trial.month > 0
+                          ? `Prueba · mes ${c.trial.month} de ${c.trial.months}`
+                          : 'Prueba terminada'}
+                      </b>
+                    </div>
+                    <div className="trial-box__sub">
+                      Desde el {formatDateLong(c.trial.startedAt)}
+                      {c.trial.endsAt && (
+                        <> · {c.trial.month > 0 ? 'termina' : 'terminó'} el {formatDateLong(c.trial.endsAt)}</>
+                      )}
+                    </div>
+                    {c.trial.endsAt && c.trial.month > 0 && (
+                      <div className="trial-box__sub">
+                        Primer cobro el {formatDateLong(c.trial.endsAt)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Qué está viviendo el consultorio ahora. Sale de la misma
+                    función que corta el acceso, así que no puede discrepar con
+                    lo que el dentista ve en pantalla. */}
+                {(() => {
+                  const manual = c.status === 'SUSPENDED';
+                  const finDePrueba =
+                    c.access.trial && c.access.level === 'ok' && c.access.daysOverdue >= 0;
+                  const a = manual
+                    ? { txt: 'Suspendido a mano', sub: 'No puede iniciar sesión. Se reactiva desde acá.', tono: 'var(--danger)' }
+                    : finDePrueba
+                      ? { txt: 'Acceso completo', sub: 'Ve el aviso de que terminaron sus dos meses de prueba', tono: 'var(--warning)' }
+                      : ACCESO[c.access.level];
+                  const vencido = c.access.daysOverdue > 0;
+                  return (
+                    <div className="acceso-box" style={{ borderColor: a.tono }}>
+                      <div className="acceso-box__top">
+                        <span className="acceso-box__dot" style={{ background: a.tono }} />
+                        <span className="acceso-box__txt" style={{ color: a.tono }}>{a.txt}</span>
+                        {!manual && vencido && (
+                          <span className="acceso-box__dias">
+                            {c.access.daysOverdue} {c.access.daysOverdue === 1 ? 'día' : 'días'} de atraso
+                          </span>
+                        )}
+                      </div>
+                      <div className="acceso-box__sub">{a.sub}</div>
+                      {!manual && c.access.readonlyAt && c.access.level !== 'readonly' && c.access.level !== 'blocked' && (
+                        <div className="acceso-box__sub">
+                          Pasa a solo lectura el {formatDateLong(c.access.readonlyAt)}
+                          {c.access.blockedAt ? ` · sin acceso el ${formatDateLong(c.access.blockedAt)}` : ''}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Lo primero: registrar el pago es la razon por la que se
+                    abre una cuenta nueve de cada diez veces. Estaba al final,
+                    despues de datos, facturacion, debito e historial. */}
+                {/* Formulario de alta. Se abre al tocar "Registrar pago": antes
+                    el boton cobraba de una y no dejaba rastro de cuanto ni como. */}
+                {payOpen && (
+                  <div className="pay-form">
+                    <div className="pay-form__row">
+                      <label className="pay-form__f">
+                        <span>Monto</span>
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          autoFocus
+                          placeholder={String(c.effectivePrice * payMonths)}
+                          value={payAmount}
+                          onChange={e => setPayAmount(e.target.value.replace(/[^\d]/g, ''))}
+                        />
+                      </label>
+                      <label className="pay-form__f">
+                        <span>Fecha</span>
+                        <input
+                          type="date"
+                          className="input"
+                          value={payDate}
+                          onChange={e => setPayDate(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label className="pay-form__f">
+                      <span>Medio</span>
+                      <div className="acc-chips">
+                        {(Object.keys(METHOD_LABEL) as ClinicPaymentMethod[]).map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={`acc-chip ${payMethod === m ? 'is-on' : ''}`}
+                            onClick={() => setPayMethod(m)}
+                          >
+                            {METHOD_LABEL[m]}
+                          </button>
+                        ))}
+                      </div>
+                    </label>
+                    <label className="pay-form__f">
+                      <span>Meses que cubre</span>
+                      <div className="acc-chips">
+                        {[1, 2, 3, 6, 12].map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={`acc-chip ${payMonths === m ? 'is-on' : ''}`}
+                            onClick={() => setPayMonths(m)}
+                          >
+                            {m === 1 ? '1 mes' : `${m} meses`}
+                          </button>
+                        ))}
+                      </div>
+                    </label>
+
+                    {/* La consecuencia, antes de confirmar. Es lo que evita
+                        registrar dos veces sin darse cuenta: si ya estaba pago,
+                        acá se ve que el mes se SUMA y hasta cuándo queda. */}
+                    {(() => {
+                      const cubierto = c.subscriptionEndsAt ? new Date(c.subscriptionEndsAt) : null;
+                      const desde = cubierto && cubierto.getTime() > payRef ? cubierto : new Date(payRef);
+                      const hasta = new Date(desde);
+                      hasta.setMonth(hasta.getMonth() + payMonths);
+                      const yaPago = cubierto && cubierto.getTime() > payRef;
+                      return (
+                        <div className="pay-form__hasta">
+                          {yaPago && (
+                            <>Ya está pago hasta el <b>{formatDateLong(cubierto)}</b>. </>
+                          )}
+                          Con este pago queda hasta el <b>{formatDateLong(hasta.toISOString())}</b>.
+                        </div>
+                      );
+                    })()}
+
+                    <label className="pay-form__f">
+                      <span>Nota (opcional)</span>
+                      <input
+                        className="input"
+                        placeholder="Ej: pagó los dos meses juntos"
+                        value={payNotes}
+                        onChange={e => setPayNotes(e.target.value)}
+                      />
+                    </label>
+                    <div className="row" style={{ gap: 8, marginTop: 4 }}>
+                      <button
+                        className="btn btn--primary btn--sm"
+                        style={{ flex: 1 }}
+                        onClick={() => paymentMutation.mutate()}
+                        disabled={paymentMutation.isPending}
+                      >
+                        <Icon name="check" size={13} /> Guardar pago
+                      </button>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setPayOpen(false)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {showPayActions && !payOpen && (
+                  <div className="row" style={{ gap: 8, marginTop: 12 }}>
+                    <button
+                      className="btn btn--primary btn--sm"
+                      style={{ flex: 1 }}
+                      onClick={() => { setPayAmount(''); setPayDate(todayYMD()); setPayRef(Date.now()); setPayOpen(true); }}
+                    >
+                      <Icon name="check" size={13} /> Registrar pago
+                    </button>
+                    <button
+                      className="btn btn--secondary btn--sm"
+                      style={{ flex: 1 }}
+                      onClick={() => extendMutation.mutate()}
+                      disabled={extendMutation.isPending}
+                    >
+                      <Icon name="clock" size={13} /> Dar prórroga
+                    </button>
+                  </div>
+                )}
 
                 {/* quick stats */}
                 <div
@@ -417,11 +547,60 @@ export function AccountDetailDrawer() {
                     label="Pacientes"
                     value={c.patientsCount.toLocaleString('es-AR')}
                   />
+                  {/* Presencia: "¿está adentro ahora?". Antes esta caja decía
+                      "Último acceso" pero mostraba el último LOGIN, así que
+                      marcaba "En línea ahora" a quien entró y cerró la
+                      notebook. Ahora sale del latido de la app. */}
                   <ConsoleMetric
-                    label="Último acceso"
+                    label="Actividad"
+                    value={
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        {ls?.online && (
+                          <span
+                            className="dot"
+                            style={{ background: 'var(--success)' }}
+                          />
+                        )}
+                        {ls ? (
+                          ls.label
+                        ) : (
+                          <span
+                            style={{
+                              color: 'var(--text-tertiary)',
+                              fontWeight: 500,
+                            }}
+                          >
+                            Sin registro aún
+                          </span>
+                        )}
+                      </span>
+                    }
+                  />
+                  {/* Uso: "¿sigue usándolo?". Es otra pregunta y la presencia
+                      no la contesta — se puede tener la pestaña abierta todo
+                      el día sin cargar nada, que es exactamente cómo se ve un
+                      cliente antes de irse. */}
+                  <ConsoleMetric
+                    label="Turnos · 7 días"
                     value={
                       <span style={{ fontSize: 14, fontWeight: 600 }}>
-                        {ls.label}
+                        {c.turnos7d === undefined ? '—' : c.turnos7d}
+                      </span>
+                    }
+                  />
+                  <ConsoleMetric
+                    label="Último ingreso"
+                    value={
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>
+                        {c.lastLoginAt ? formatLastSeen(c.lastLoginAt).label : 'Nunca'}
                       </span>
                     }
                   />
@@ -504,6 +683,7 @@ export function AccountDetailDrawer() {
                   </button>
                 </div>
 
+
                 <SectionTitle>Datos de la cuenta</SectionTitle>
                 <div style={{ marginBottom: 8 }}>
                   <DetailRow label="Usuario">
@@ -578,71 +758,6 @@ export function AccountDetailDrawer() {
                   </DetailRow>
                 </div>
 
-                {/* Formulario de alta. Se abre al tocar "Registrar pago": antes
-                    el boton cobraba de una y no dejaba rastro de cuanto ni como. */}
-                {payOpen && (
-                  <div className="pay-form">
-                    <div className="pay-form__row">
-                      <label className="pay-form__f">
-                        <span>Monto</span>
-                        <input
-                          className="input"
-                          inputMode="numeric"
-                          autoFocus
-                          placeholder={String(c.effectivePrice)}
-                          value={payAmount}
-                          onChange={e => setPayAmount(e.target.value.replace(/[^\d]/g, ''))}
-                        />
-                      </label>
-                      <label className="pay-form__f">
-                        <span>Fecha</span>
-                        <input
-                          type="date"
-                          className="input"
-                          value={payDate}
-                          onChange={e => setPayDate(e.target.value)}
-                        />
-                      </label>
-                    </div>
-                    <label className="pay-form__f">
-                      <span>Medio</span>
-                      <div className="acc-chips">
-                        {(Object.keys(METHOD_LABEL) as ClinicPaymentMethod[]).map(m => (
-                          <button
-                            key={m}
-                            type="button"
-                            className={`acc-chip ${payMethod === m ? 'is-on' : ''}`}
-                            onClick={() => setPayMethod(m)}
-                          >
-                            {METHOD_LABEL[m]}
-                          </button>
-                        ))}
-                      </div>
-                    </label>
-                    <label className="pay-form__f">
-                      <span>Nota (opcional)</span>
-                      <input
-                        className="input"
-                        placeholder="Ej: pagó los dos meses juntos"
-                        value={payNotes}
-                        onChange={e => setPayNotes(e.target.value)}
-                      />
-                    </label>
-                    <div className="row" style={{ gap: 8, marginTop: 4 }}>
-                      <button
-                        className="btn btn--primary btn--sm"
-                        style={{ flex: 1 }}
-                        onClick={() => paymentMutation.mutate()}
-                        disabled={paymentMutation.isPending}
-                      >
-                        <Icon name="check" size={13} /> Guardar pago
-                      </button>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setPayOpen(false)}>
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {/* Débito automático. El dentista autoriza UNA vez desde el link
                     y de ahí Mercado Pago cobra solo; el webhook asienta cada
@@ -750,25 +865,6 @@ export function AccountDetailDrawer() {
                   </>
                 )}
 
-                {showPayActions && !payOpen && (
-                  <div className="row" style={{ gap: 8, marginTop: 12 }}>
-                    <button
-                      className="btn btn--primary btn--sm"
-                      style={{ flex: 1 }}
-                      onClick={() => { setPayAmount(''); setPayDate(todayYMD()); setPayOpen(true); }}
-                    >
-                      <Icon name="check" size={13} /> Registrar pago
-                    </button>
-                    <button
-                      className="btn btn--secondary btn--sm"
-                      style={{ flex: 1 }}
-                      onClick={() => extendMutation.mutate()}
-                      disabled={extendMutation.isPending}
-                    >
-                      <Icon name="clock" size={13} /> Dar prórroga
-                    </button>
-                  </div>
-                )}
 
                 <ClinicUsersSection clinicId={clinicId} clinicName={c.name} />
               </div>

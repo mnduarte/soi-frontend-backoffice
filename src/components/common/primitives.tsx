@@ -128,7 +128,10 @@ const ACC_STATUS: Record<
 > = {
   ACTIVE:    { label: 'Activo',       variant: 'success', dot: 'var(--success)' },
   SUSPENDED: { label: 'Suspendido',   variant: 'danger',  dot: 'var(--danger)' },
-  TRIAL:     { label: 'Activo',       variant: 'success', dot: 'var(--success)' },
+  // "Activo" para un consultorio en prueba confundia: al lado del recuadro que
+  // dice "Prueba terminada" parecian dos verdades distintas. Puede usar el
+  // sistema igual, pero lo que importa saber de un vistazo es que NO paga aun.
+  TRIAL:     { label: 'Prueba',       variant: 'brand',   dot: 'var(--brand-primary)' },
 };
 
 const PENDING_ACTIVATION = {
@@ -196,8 +199,17 @@ export function PayBadge({
 // LastSeenCell — "En línea ahora" / "hace Nd".
 // =============================================================================
 
-export function LastSeenCell({ lastLoginAt }: { lastLoginAt: string | null }) {
-  const ls = formatLastSeen(lastLoginAt);
+export function LastSeenCell({
+  lastSeenAt,
+  lastLoginAt,
+}: {
+  lastSeenAt: string | null;
+  lastLoginAt: string | null;
+}) {
+  // Presencia primero. El login queda de respaldo para las cuentas que todavía
+  // no tienen `lastSeenAt` (nadie abrió la app desde que existe el campo): sin
+  // eso, una cuenta con meses de uso aparecería como "Nunca".
+  const ls = formatLastSeen(lastSeenAt ?? lastLoginAt);
   return (
     <span
       className="row"

@@ -222,15 +222,28 @@ function ClinicCard({
       <div className="acc-card__badges">
         <AccStatusBadge status={clinic.status} activated={clinic.activated} />
         <PayBadge paymentStatus={clinic.paymentStatus} daysToDue={clinic.daysToDue} />
+        {/* Solo cuando el consultorio esta limitado de verdad. Un chip por cada
+            cuenta al dia seria ruido: lo normal no necesita etiqueta. */}
+        {clinic.status !== 'SUSPENDED' && clinic.access.level === 'readonly' && (
+          <span className="acc-lim">Solo lectura</span>
+        )}
+        {clinic.status !== 'SUSPENDED' && clinic.access.level === 'blocked' && (
+          <span className="acc-lim">Sin acceso</span>
+        )}
       </div>
 
       <div className="acc-card__foot">
         {/* "hace 1 dia" para el pantallazo y la fecha exacta al lado, que es lo
             que sirve cuando hay que cruzarlo con algo (un reclamo, un pago). */}
         <span className="acc-card__seen">
-          <LastSeenCell lastLoginAt={clinic.lastLoginAt} />
-          {clinic.lastLoginAt && (
-            <span className="acc-card__exact mono">{fechaHora(clinic.lastLoginAt)}</span>
+          <LastSeenCell
+            lastSeenAt={clinic.lastSeenAt}
+            lastLoginAt={clinic.lastLoginAt}
+          />
+          {(clinic.lastSeenAt ?? clinic.lastLoginAt) && (
+            <span className="acc-card__exact mono">
+              {fechaHora((clinic.lastSeenAt ?? clinic.lastLoginAt)!)}
+            </span>
           )}
         </span>
         <span className="acc-card__pac">

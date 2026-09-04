@@ -24,7 +24,19 @@ export interface ClinicListItem {
   createdAt: string;
   updatedAt: string;
   patientsCount: number;
+  /** Cuándo inició sesión por última vez. Contesta "cuándo entró". */
   lastLoginAt: string | null;
+  /**
+   * Cuándo tuvo la app abierta y a la vista por última vez. Contesta "¿está
+   * adentro ahora?", que es otra pregunta: se puede haber logueado hace tres
+   * horas y estar trabajando en este momento, o al revés.
+   */
+  lastSeenAt: string | null;
+  /**
+   * Turnos cargados en los últimos 7 días. `undefined` = el endpoint no lo
+   * mandó; 0 = mandó cero, que es un dato muy distinto (cliente que se va).
+   */
+  turnos7d?: number;
   daysToDue: number | null;
   paymentStatus: PaymentStatus;
   // True once the OWNER has run setupPassword (i.e. the invite-link "create
@@ -34,6 +46,10 @@ export interface ClinicListItem {
   planPriceMonthly: number | null;
   /** Lo que realmente paga: el suyo o el de lista. */
   effectivePrice: number;
+  /** Qué está viviendo el consultorio ahora mismo (misma fuente que el corte). */
+  access: AccessState;
+  /** Solo si está en prueba: desde cuándo, por qué mes va y cuándo termina. */
+  trial: TrialInfo | null;
 
   // ---- Débito automático (Mercado Pago) ----
   /** null = nunca se creó. 'pending' = falta que el dentista autorice. */
@@ -55,6 +71,31 @@ export interface MpSubscriptionResult {
   amount: number;
 }
 
+export type AccessLevel =
+  | 'ok'        // al día
+  | 'soft'      // aviso amarillo · acceso completo
+  | 'firm'      // aviso naranja  · acceso completo
+  | 'readonly'  // consulta fichas, no carga nada
+  | 'blocked';  // no puede entrar
+
+export interface TrialInfo {
+  startedAt: string;
+  /** Mes en curso (1..months). */
+  month: number;
+  months: number;
+  endsAt: string | null;
+}
+
+export interface AccessState {
+  level: AccessLevel;
+  /** true = se mide contra el fin de la prueba, no contra un pago. */
+  trial: boolean;
+  daysOverdue: number;
+  dueAt: string | null;
+  readonlyAt: string | null;
+  blockedAt: string | null;
+}
+
 export type ClinicPaymentMethod = 'CASH' | 'TRANSFER' | 'MERCADO_PAGO' | 'OTHER';
 
 export interface ClinicPayment {
@@ -72,6 +113,8 @@ export interface ClinicPayment {
 
 export interface RecordPaymentInput {
   days?: number;
+  /** Meses que cubre. Se suman a lo que ya tiene pago, no lo pisan. */
+  months?: number;
   amount?: number;
   paidAt?: string;
   method?: ClinicPaymentMethod;
