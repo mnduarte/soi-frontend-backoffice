@@ -984,6 +984,44 @@ table.tbl { width: 100%; border-collapse: collapse; }
 /* Filtros de estado como pastillas. Como pestanas, "Sin activar" mas su
    contador no entraban a lo ancho y se partian en tres renglones contra el
    subrayado. */
+/* Buscador de cuentas: se usa pegando algo desde WhatsApp —un número, un
+   usuario—, así que va primero en la barra y ancho, no escondido en un ícono. */
+.acc-buscar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 34px;
+  min-width: 260px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+}
+.acc-buscar:focus-within { border-color: var(--brand-primary); color: var(--brand-primary); }
+.acc-buscar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.acc-buscar button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  padding: 2px;
+}
+.acc-buscar button:hover { color: var(--text-primary); }
+@media (max-width: 720px) {
+  .acc-buscar { min-width: 0; flex: 1 1 100%; }
+}
+
 .acc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .acc-chip {
   display: inline-flex;

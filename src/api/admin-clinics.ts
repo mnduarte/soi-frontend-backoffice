@@ -16,6 +16,8 @@ export interface ClinicListItem {
   city?: string;
   phone?: string;
   contactEmail?: string;
+  /** Usuario del titular. Llega en las consultas por WhatsApp de la app. */
+  ownerUsername?: string | null;
   status: ClinicStatus;
   brandColor: string;
   logoStyle: LogoStyle;

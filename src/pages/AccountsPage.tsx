@@ -39,6 +39,7 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
 
 export default function AccountsPage() {
   const openDrawer = useUIStore(s => s.openDrawer);
+  const [busqueda, setBusqueda] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [payFilter, setPayFilter] = useState<PayFilterKey>(null);
 
@@ -69,8 +70,28 @@ export default function AccountsPage() {
     return counts;
   }, [clinics]);
 
+  /*
+   * Buscar para saber QUIÉN escribió.
+   *
+   * La app manda las consultas por WhatsApp con el consultorio y el usuario
+   * adentro del mensaje, así que pegando cualquiera de los dos acá aparece la
+   * cuenta. Y si lo que se tiene es el número —el que muestra WhatsApp—,
+   * también: se comparan solo los dígitos, porque el teléfono guardado puede
+   * estar como "11 5623-4891" y WhatsApp lo muestra como "+54 9 11 5623 4891".
+   * Se cotejan los últimos 8, que es lo que no cambia entre las dos formas: el
+   * código de país y el 9 sobran, y el 11 puede estar o no.
+   */
   const filtered = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    const digitos = q.replace(/\D/g, '');
+    const cola = (n: string) => n.replace(/\D/g, '').slice(-8);
     return clinics.filter(c => {
+      if (q) {
+        const campos = [c.name, c.slug, c.doctorName, c.contactEmail, c.ownerUsername, c.city];
+        const porTexto = campos.some(v => v?.toLowerCase().includes(q));
+        const porNumero = digitos.length >= 6 && !!c.phone && cola(c.phone) === cola(digitos);
+        if (!porTexto && !porNumero) return false;
+      }
       if (statusFilter === 'pending') {
         if (c.activated || c.status === 'SUSPENDED') return false;
       } else if (statusFilter !== 'all' && c.status !== statusFilter) {
@@ -79,7 +100,7 @@ export default function AccountsPage() {
       if (payFilter && c.paymentStatus !== payFilter) return false;
       return true;
     });
-  }, [clinics, statusFilter, payFilter]);
+  }, [clinics, statusFilter, payFilter, busqueda]);
 
   return (
     <div className="content fade-in">
@@ -135,6 +156,23 @@ export default function AccountsPage() {
             flexWrap: 'wrap',
           }}
         >
+          {/* Buscar por lo que llega en una consulta: el consultorio, el
+              usuario o el número de WhatsApp. */}
+          <div className="acc-buscar">
+            <Icon name="search" size={14} />
+            <input
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Consultorio, usuario o teléfono…"
+              aria-label="Buscar cuenta"
+            />
+            {busqueda && (
+              <button type="button" onClick={() => setBusqueda('')} aria-label="Limpiar búsqueda">
+                <Icon name="x" size={13} />
+              </button>
+            )}
+          </div>
+
           {/* Chips en vez de pestanas: "Sin activar" y su contador se partian
               en tres renglones contra el subrayado. Una pastilla por filtro no
               se rompe y el numero entra adentro, junto a lo que cuenta. */}
