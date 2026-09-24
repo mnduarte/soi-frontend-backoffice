@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { PwaConsola } from './PwaConsola';
 import { Icon, type IconName } from '../common/Icon';
 import { ConsoleLogo } from '../common/primitives';
 import { useAdminAuthStore } from '../../store/admin-auth.store';
@@ -88,6 +89,10 @@ export function ConsoleSidebar({ isOpen, onClose, counts }: ConsoleSidebarProps)
           ))}
         </div>
       ))}
+
+      {/* Instalar: abajo, pegado al usuario. Solo aparece si este navegador
+          puede hacerlo y todavía no está instalada. */}
+      <PwaConsola />
 
       <div className="sidebar__user">
         <div

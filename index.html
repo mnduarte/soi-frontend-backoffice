@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- El iPhone no lee los íconos del manifiesto: usa este. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#7C3AED" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Consola" />
     <title>SOI Consola</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,6 +17,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- El navegador avisa que la app se puede instalar apenas carga la
+         página, antes de que React monte nada. Si nadie lo escucha en ese
+         momento, el aviso se pierde y la opción no aparece nunca. -->
+    <script>
+      window.__soiInstalar = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__soiInstalar = e;
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

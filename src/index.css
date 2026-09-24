@@ -201,8 +201,29 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-muted);
 }
 
+/* Instalar la consola: un ítem del menú, no un cartel. La usa una sola
+   persona, que ya sabe lo que quiere.
+   El `auto` vive acá y no en el bloque del usuario: este contenedor se dibuja
+   siempre (a veces vacío) y es el que empuja a los dos al pie. Con el `auto`
+   en los dos, el sobrante se repartiría y quedarían separados. */
+.consola-instalar { margin-top: auto; }
+.consola-instalar .nav-item {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  color: var(--text-tertiary);
+}
+.consola-instalar__pasos {
+  margin: 2px 12px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
 .sidebar__user {
-  margin-top: auto;
+  margin-top: 0;
   padding: 10px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
